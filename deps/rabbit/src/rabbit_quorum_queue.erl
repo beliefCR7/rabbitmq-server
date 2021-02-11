@@ -43,7 +43,8 @@
          ]).
 -export([reclaim_memory/2]).
 -export([notify_decorators/1,
-         notify_decorators/3]).
+         notify_decorators/3,
+         spawn_notify_decorators/3]).
 
 -include_lib("stdlib/include/qlc.hrl").
 -include("rabbit.hrl").
@@ -336,6 +337,11 @@ spawn_deleter(QName) ->
     spawn(fun () ->
                   {ok, Q} = rabbit_amqqueue:lookup(QName),
                   delete(Q, false, false, <<"expired">>)
+          end).
+
+spawn_notify_decorators(QName, Fun, Args) ->
+    spawn(fun () ->
+                  notify_decorators(QName, Fun, Args)
           end).
 
 handle_tick(QName,

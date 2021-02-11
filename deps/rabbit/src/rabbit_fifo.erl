@@ -401,10 +401,8 @@ apply(#{system_time := Ts} = Meta, {down, Pid, noconnection},
                                         _ ->
                                             Waiting0
                                     end,
-                          Filter = fun(C) -> C =/= Cid end,
                           {St#?MODULE{consumers = maps:remove(Cid, St#?MODULE.consumers),
                                       waiting_consumers = Waiting,
-                                      service_queue = priority_queue:filter(Filter, St#?MODULE.service_queue),
                                       last_active = Ts},
                            Effs1};
                      (_, _, S) ->
@@ -965,8 +963,19 @@ query_peek(Pos, State0) when Pos > 0 ->
             query_peek(Pos-1, State)
     end.
 
-query_notify_decorators_info(#?MODULE{service_queue = SQ} = State) ->
-    MaxActivePriority = priority_queue:highest(SQ),
+query_notify_decorators_info(#?MODULE{consumers = Consumers} = State) ->
+    MaxActivePriority = maps:fold(fun(_, #consumer{credit = C,
+                                                   status = up,
+                                                   priority = P0}, MaxP) when C > 0 ->
+                                          P = -P0,
+                                          case MaxP of
+                                              empty -> P;
+                                              MaxP when MaxP > P -> MaxP;
+                                              _ -> P
+                                          end;
+                                     (_, _, MaxP) ->
+                                          MaxP
+                                  end, empty, Consumers),
     IsEmpty = (messages_ready(State) == 0),
     {MaxActivePriority, IsEmpty}.
 
@@ -1068,15 +1077,11 @@ consumer_update_active_effects(#?MODULE{cfg = #cfg{resource = QName}},
       | Effects].
 
 cancel_consumer0(Meta, ConsumerId,
-                 #?MODULE{consumers = C0,
-                          service_queue = SQ0} = S0, Effects0, Reason) ->
+                 #?MODULE{consumers = C0} = S0, Effects0, Reason) ->
     case C0 of
         #{ConsumerId := Consumer} ->
-            {S1, Effects2} = maybe_return_all(Meta, ConsumerId, Consumer,
+            {S, Effects2} = maybe_return_all(Meta, ConsumerId, Consumer,
                                              S0, Effects0, Reason),
-
-            Filter = fun(C) -> C =/= ConsumerId end,
-            S = S1#?MODULE{service_queue = priority_queue:filter(Filter, SQ0)},
 
             %% The effects are emitted before the consumer is actually removed
             %% if the consumer has unacked messages. This is a bit weird but
@@ -2173,6 +2178,5 @@ notify_decorators_effect(#?MODULE{cfg = #cfg{resource = QName}} = State) ->
     notify_decorators_effect(QName, MaxActivePriority, IsEmpty).
 
 notify_decorators_effect(QName, MaxActivePriority, IsEmpty) ->
-    {mod_call, rabbit_quorum_queue, notify_decorators,
-     [QName, consumer_state_changed,
-      [MaxActivePriority, IsEmpty]]}.
+    {mod_call, rabbit_quorum_queue, spawn_notify_decorators,
+     [QName, consumer_state_changed, [MaxActivePriority, IsEmpty]]}.
