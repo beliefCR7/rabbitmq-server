@@ -459,12 +459,11 @@ apply(#{system_time := Ts} = Meta, {down, Pid, noconnection},
     % comes back, then re-issue all monitors and discover the final fate of
     % these processes
 
-    NotifyEffect = notify_decorators_effect(State),
     Effects = case maps:size(State#?MODULE.consumers) of
                   0 ->
-                      [{aux, inactive}, {monitor, node, Node}, NotifyEffect];
+                      [{aux, inactive}, {monitor, node, Node}];
                   _ ->
-                      [{monitor, node, Node}, NotifyEffect]
+                      [{monitor, node, Node}]
               end ++ Effects1,
     checkout(Meta, State0, State#?MODULE{enqueuers = Enqs,
                                          last_active = Ts}, Effects);

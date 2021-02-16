@@ -369,5 +369,8 @@ expect_no_federation(Ch, UpstreamQ, DownstreamQ) ->
     expect_empty(Ch, DownstreamQ),
     expect(Ch, UpstreamQ, [<<"HELLO">>]).
 
+upstream_downstream() ->
+    upstream_downstream([]).
+
 upstream_downstream(Args) ->
     [q(<<"upstream">>, Args), q(<<"fed.downstream">>, Args)].
